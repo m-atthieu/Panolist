@@ -6,8 +6,9 @@
 #  Copyright (c) 2010 __MyCompanyName__. All rights reserved.
 #
 
-import objc, os, re
+import objc, os, re, subprocess
 from Foundation import *
+from AppKit import *
 
 # helper
 def p(dirname, ptofile, imagefile):
@@ -27,6 +28,7 @@ class PLController(NSObject):
 	notPresentPanoramas = objc.ivar()
 	notPresentArrayController = objc.IBOutlet()
 	
+	tabView = objc.IBOutlet()
 	rootPath = objc.IBOutlet()
 
 	@objc.IBAction
@@ -37,13 +39,61 @@ class PLController(NSObject):
 		self._.notPresentPanoramas = [NSDictionary.dictionaryWithDictionary_(x) for x in np]
 		NSLog("refreshing ")
 
+	@objc.IBAction
+	def openWithHugin_(self, sender):
+		panorama = self.selectedObject(self.selectedArrayController(), 'pto')
+		subprocess.call(["hugin", panorama])
+		
+
+	# cette action est-elle necessaire ?
+	# il y a de grandes chances que si un pano deja finalise est present, il soit pris en 
+	# compte dans la bataille; autant supprimer le bouton et passer par 'open in finder'
+	#@objc.IBAction
+	#def autopano_(self, sender):
+	#	directory = self.selectedObjects(self.selectedArrayController(), 'panorama_name')
+	#	subprocess.call(['autopano-sift-c', panorama_name + '/*.jpg'])
+	#	pass
+	
+	@objc.IBAction
+	def openInFinder_(self, sender):
+		directory = self.selectedObject(self.selectedArrayController(), 'panorama_name')
+		NSLog(u"directory : %s" % directory)
+		ws = NSWorkspace.sharedWorkspace()
+		ws.openFile_(directory)
+
+	def selectedArrayController(self):
+		# cela va dependre du tableau qui est selectionne
+		index = self.tabView.indexOfTabViewItem_(self.tabView.selectedTabViewItem())
+		if index == 0:
+			# completed
+			return self.completedArrayController
+		elif index == 1:
+			# not stitched
+			return self.notStitchedArrayController
+		elif index == 2:
+			# nothing
+			return self.notPresentArrayController
+		else:
+			return None
+
+	def selectedObject(self, arrayController, key):
+		selectedObjects = arrayController.selectedObjects()
+		if len(selectedObjects) == 0:
+			NSLog(u"No selected object")
+			return None
+		row = selectedObjects[0]
+		if not key is None and (not row.has_key(key) or row[key] is None):
+			NSLog(u'Required key is not present')
+			return None
+		return row[key]
+
 	def panoramalist(self, top):
 		c = []
 		ns = []
 		np = []
 		#panorama_directory = re.compile("[/\]\d{4}[/\\]\d{2}[/\\]\d{2}[/\\]{1}(?P<panorama>[\S])+$", re.I)
 		panorama_directory = re.compile("\d{4}/\d{2}/\d{2}/(?P<panorama_name>[\w][\S]+)$", re.I)
-		panorama_files = re.compile('[\w][\S]+\.pto', re.I)
+		panorama_files = re.compile('(?P<pto>[\w][\S]+)\.pto', re.I)
 		for root, dirs, files in os.walk(top):
 			m = panorama_directory.search(root.replace('\\', '/'))
 			if m is not None:
@@ -58,9 +108,15 @@ class PLController(NSObject):
 				else:
 					found = False
 					for file in files:
-						if panorama_files.search(file):
+						m = panorama_files.search(file)
+						if m is not None:
 							found = True
-							
+							if m.group('pto') + '.tif' in files:
+								c.append(p(root, file, m.group('pto') + '.tif'))
+							elif m.group('pto') + '.jpg' in files:
+								c.append(p(root, file, m.group('pto') + '.jpg'))
+							else:
+								ns.append(p(root, file, None))
 					if not found:
 						np.append(p(root, None, None))
 		return c, ns, np
