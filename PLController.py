@@ -28,34 +28,29 @@ class PLController(NSObject):
 	notPresentPanoramas = objc.ivar()
 	notPresentArrayController = objc.IBOutlet()
 	
+	otherDoneTableView = objc.IBOutlet()
+	otherDonePanoramas = objc.ivar()
+	otherDoneArrayController = objc.IBOutlet()
+	
 	tabView = objc.IBOutlet()
 	rootPath = objc.IBOutlet()
 
 	@objc.IBAction
 	def refreshRootPath_(self, sender):
-		c, ns, np = self.panoramalist(self.rootPath.stringValue())
+		c, ns, od, np = self.panoramalist(self.rootPath.stringValue())
 		self._.completedPanoramas = [NSDictionary.dictionaryWithDictionary_(x) for x in c]
 		self._.notStitchedPanoramas = [NSDictionary.dictionaryWithDictionary_(x) for x in ns]
 		self._.notPresentPanoramas = [NSDictionary.dictionaryWithDictionary_(x) for x in np]
-		self.tabView.tabViewItemAtIndex_(0).setLabel_(u"Completed (" + str(len(c)) + ")")
-		self.tabView.tabViewItemAtIndex_(1).setLabel_(u"Not Stitched (" + str(len(ns)) + ")")
-		self.tabView.tabViewItemAtIndex_(2).setLabel_(u"Nothing Done (" + str(len(np)) + ")")
-		NSLog("refreshing ")
+		self._.otherDonePanoramas = [NSDictionary.dictionaryWithDictionary_(x) for x in od]
+		self.tabView.tabViewItemAtIndex_(0).setLabel_(u"Completed (%d)" % len(c))
+		self.tabView.tabViewItemAtIndex_(1).setLabel_(u"Not Stitched (%d)" % len(ns))
+		self.tabView.tabViewItemAtIndex_(2).setLabel_(u"Nothing Done (%d)" % len(np))
+		self.tabView.tabViewItemAtIndex_(3).setLabel_(u"Other Done (%d)" % len(od))
 
 	@objc.IBAction
 	def openWithHugin_(self, sender):
 		panorama = self.selectedObject(self.selectedArrayController(), 'pto')
 		subprocess.call(["hugin", panorama])
-		
-
-	# cette action est-elle necessaire ?
-	# il y a de grandes chances que si un pano deja finalise est present, il soit pris en 
-	# compte dans la bataille; autant supprimer le bouton et passer par 'open in finder'
-	#@objc.IBAction
-	#def autopano_(self, sender):
-	#	directory = self.selectedObjects(self.selectedArrayController(), 'panorama_name')
-	#	subprocess.call(['autopano-sift-c', panorama_name + '/*.jpg'])
-	#	pass
 	
 	@objc.IBAction
 	def openInFinder_(self, sender):
@@ -76,6 +71,9 @@ class PLController(NSObject):
 		elif index == 2:
 			# nothing
 			return self.notPresentArrayController
+		elif index == 3:
+			# other panorama done
+			return self.otherDoneArrayController
 		else:
 			return None
 
@@ -90,13 +88,32 @@ class PLController(NSObject):
 			return None
 		return row[key]
 
+	# quand on est dans un repertoire de panorama
+	# - on cherche le .pto du meme nom
+	#   - si on le trouve
+	#     - on cherche le tif associe (j'emmerde le jpg)
+	#       - si on le trouve 
+	#         - => completed
+	#       - si on ne le trouve pas
+	#         - on ne peut rien dire pour l'instant
+	#   - si on ne le trouve pas
+	#     - on cherche un autre pto
+	#       - si on le trouve
+	#         - on cherche le tif associe
+	#           - si on le trouve
+	#             - => completed
+	#             - => otherdone
+	#           - si on ne le trouve pas
+	#             - => notstitched
+	#       - si on ne le trouve pas
+	#         - => nothing
 	def panoramalist(self, top):
-		c = []
-		ns = []
-		np = []
-		#panorama_directory = re.compile("[/\]\d{4}[/\\]\d{2}[/\\]\d{2}[/\\]{1}(?P<panorama>[\S])+$", re.I)
+		c = []  # complete panoramas
+		ns = [] # not stitched panoramas
+		np = [] # nothing done
+		od = [] # another pto has been stitched
 		panorama_directory = re.compile("\d{4}/\d{2}/\d{2}/(?P<panorama_name>[\w][\S]+)$", re.I)
-		panorama_files = re.compile('(?P<pto>[\w][\S]+)\.pto', re.I)
+		panorama_files = re.compile('(?P<pto>[\S]+)\.pto$', re.I)
 		for root, dirs, files in os.walk(top):
 			m = panorama_directory.search(root.replace('\\', '/'))
 			if m is not None:
@@ -104,22 +121,17 @@ class PLController(NSObject):
 				if panorama_name in files:
 					if m.group('panorama_name') + '.tif' in files:
 						c.append(p(root, panorama_name, m.group('panorama_name') + '.tif'))
-					elif m.group('panorama_name') + '.jpg' in files:
-						c.append(p(root, panorama_name, m.group('panorama_name') + '.jpg'))
-					else:
-						ns.append(p(root, panorama_name, None))
-				else:
-					found = False
-					for file in files:
-						m = panorama_files.search(file)
-						if m is not None:
-							found = True
-							if m.group('pto') + '.tif' in files:
-								c.append(p(root, file, m.group('pto') + '.tif'))
-							elif m.group('pto') + '.jpg' in files:
-								c.append(p(root, file, m.group('pto') + '.jpg'))
-							else:
-								ns.append(p(root, file, None))
-					if not found:
-						np.append(p(root, None, None))
-		return c, ns, np
+						continue
+				found = False
+				for file in files:
+					m2 = panorama_files.search(file)
+					if m2 is not None:
+						if m2.group('pto') + '.tif' in files:
+							c.append(p(root, file, m2.group('pto') + '.tif'))
+							od.append(p(root, m.group('panorama_name'), None))
+						else:
+							ns.append(p(root, file, None))
+						found = True
+				if not found:
+					np.append(p(root, None, None))
+		return c, ns, od, np
