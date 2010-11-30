@@ -37,6 +37,9 @@ class PLController(NSObject):
 		self._.completedPanoramas = [NSDictionary.dictionaryWithDictionary_(x) for x in c]
 		self._.notStitchedPanoramas = [NSDictionary.dictionaryWithDictionary_(x) for x in ns]
 		self._.notPresentPanoramas = [NSDictionary.dictionaryWithDictionary_(x) for x in np]
+		self.tabView.tabViewItemAtIndex_(0).setLabel_(u"Completed (" + str(len(c)) + ")")
+		self.tabView.tabViewItemAtIndex_(1).setLabel_(u"Not Stitched (" + str(len(ns)) + ")")
+		self.tabView.tabViewItemAtIndex_(2).setLabel_(u"Nothing Done (" + str(len(np)) + ")")
 		NSLog("refreshing ")
 
 	@objc.IBAction
