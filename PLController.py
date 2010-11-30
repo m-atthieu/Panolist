@@ -88,25 +88,6 @@ class PLController(NSObject):
 			return None
 		return row[key]
 
-	# quand on est dans un repertoire de panorama
-	# - on cherche le .pto du meme nom
-	#   - si on le trouve
-	#     - on cherche le tif associe (j'emmerde le jpg)
-	#       - si on le trouve 
-	#         - => completed
-	#       - si on ne le trouve pas
-	#         - on ne peut rien dire pour l'instant
-	#   - si on ne le trouve pas
-	#     - on cherche un autre pto
-	#       - si on le trouve
-	#         - on cherche le tif associe
-	#           - si on le trouve
-	#             - => completed
-	#             - => otherdone
-	#           - si on ne le trouve pas
-	#             - => notstitched
-	#       - si on ne le trouve pas
-	#         - => nothing
 	def panoramalist(self, top):
 		c = []  # complete panoramas
 		ns = [] # not stitched panoramas
@@ -119,14 +100,21 @@ class PLController(NSObject):
 			if m is not None:
 				panorama_name = m.group('panorama_name') + '.pto'
 				if panorama_name in files:
-					if m.group('panorama_name') + '.tif' in files:
+					if m.group('panorama_name') + '.tif' in files or m.group('panorama_name') + '_fused.tif' in files:
 						c.append(p(root, panorama_name, m.group('panorama_name') + '.tif'))
 						continue
+				derived_panorama_files = re.compile('(?P<pto>' + m.group('panorama_name') + '.*)\.pto$', re.I)
 				found = False
 				for file in files:
 					m2 = panorama_files.search(file)
-					if m2 is not None:
-						if m2.group('pto') + '.tif' in files:
+					m3 = derived_panorama_files.search(file)
+					if m3 is not None:
+						if m3.group('pto') + '.tif' in files or m3.group('pto') + '_fused.tif' in files:
+							c.append(p(root, file, m3.group('pto') + '.tif'))
+							od.append(p(root, m.group('panorama_name'), None))
+						found = True
+					elif m2 is not None and not found:
+						if m2.group('pto') + '.tif' in files or m2.group('pto') + '_fused.tif' in files:
 							c.append(p(root, file, m2.group('pto') + '.tif'))
 							od.append(p(root, m.group('panorama_name'), None))
 						else:
