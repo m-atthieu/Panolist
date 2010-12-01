@@ -55,7 +55,6 @@ class PLController(NSObject):
 	@objc.IBAction
 	def openInFinder_(self, sender):
 		directory = self.selectedObject(self.selectedArrayController(), 'panorama_name')
-		NSLog(u"directory : %s" % directory)
 		ws = NSWorkspace.sharedWorkspace()
 		ws.openFile_(directory)
 
@@ -94,32 +93,25 @@ class PLController(NSObject):
 		np = [] # nothing done
 		od = [] # another pto has been stitched
 		panorama_directory = re.compile("\d{4}/\d{2}/\d{2}/(?P<panorama_name>[\w][\S]+)$", re.I)
-		panorama_files = re.compile('(?P<pto>[\S]+)\.pto$', re.I)
+		pto_re = re.compile('(?P<pto>[\S]+)\.pto$', re.I)
 		for root, dirs, files in os.walk(top):
 			m = panorama_directory.search(root.replace('\\', '/'))
 			if m is not None:
-				panorama_name = m.group('panorama_name') + '.pto'
-				if panorama_name in files:
-					if m.group('panorama_name') + '.tif' in files or m.group('panorama_name') + '_fused.tif' in files:
-						c.append(p(root, panorama_name, m.group('panorama_name') + '.tif'))
-						continue
-				derived_panorama_files = re.compile('(?P<pto>' + m.group('panorama_name') + '.*)\.pto$', re.I)
-				found = False
-				for file in files:
-					m2 = panorama_files.search(file)
-					m3 = derived_panorama_files.search(file)
-					if m3 is not None:
-						if m3.group('pto') + '.tif' in files or m3.group('pto') + '_fused.tif' in files:
-							c.append(p(root, file, m3.group('pto') + '.tif'))
-							od.append(p(root, m.group('panorama_name'), None))
-						found = True
-					elif m2 is not None and not found:
-						if m2.group('pto') + '.tif' in files or m2.group('pto') + '_fused.tif' in files:
-							c.append(p(root, file, m2.group('pto') + '.tif'))
-							od.append(p(root, m.group('panorama_name'), None))
-						else:
-							ns.append(p(root, file, None))
-						found = True
-				if not found:
+				pto_files = filter(pto_re.search, files)
+				if len(pto_files) > 0:
+					found = False
+					for pto_file in pto_files:
+						if not found:
+							pto = pto_re.search(pto_file)
+							output_re_str = '(?P<out>(' + pto.group('pto') + '|' + m.group('panorama_name') + ').*\.(tif|jpg))$'
+							output_re = re.compile(output_re_str)
+							output_files = filter(output_re.search, files)
+							if len(output_files) > 0:
+								output = output_re.search(output_files[0])
+								c.append(p(root, pto.group('pto'), output.group('out')))
+								found = True
+					if not found:
+						ns.append(p(root, pto_files[0], None))
+				else:
 					np.append(p(root, None, None))
 		return c, ns, od, np
