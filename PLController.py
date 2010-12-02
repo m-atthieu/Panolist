@@ -50,7 +50,10 @@ class PLController(NSObject):
 	@objc.IBAction
 	def openWithHugin_(self, sender):
 		panorama = self.selectedObject(self.selectedArrayController(), 'pto')
-		subprocess.call(["hugin", panorama])
+		directory = self.selectedObject(self.selectedArrayController(), 'panorama_name') 
+		panorama = directory + '/' + panorama
+		NSLog(u"pano = %s" % panorama)
+		subprocess.call(["/Applications/Hugin.app/Contents/MacOS/Hugin", panorama])
 	
 	@objc.IBAction
 	def openInFinder_(self, sender):
